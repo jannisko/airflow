@@ -93,3 +93,9 @@ with DAG(
     [bash_pull, python_pull_from_bash] << bash_push
 
     puller(push_by_returning()) << push()
+
+
+if __name__ == "__main__":
+    run = dag.test()
+
+    print(run.xcom_pull(task_ids="push_by_returning"))

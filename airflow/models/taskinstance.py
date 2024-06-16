@@ -562,9 +562,9 @@ def clear_task_instances(
 @provide_session
 def _xcom_pull(
     *,
-    ti,
+    run_id: str,
     task_ids: str | Iterable[str] | None = None,
-    dag_id: str | None = None,
+    dag_id: str,
     key: str = XCOM_RETURN_KEY,
     include_prior_dates: bool = False,
     session: Session = NEW_SESSION,
@@ -601,12 +601,9 @@ def _xcom_pull(
     a non-str iterable), a list of matching XComs is returned. Elements in
     the list is ordered by item ordering in ``task_id`` and ``map_index``.
     """
-    if dag_id is None:
-        dag_id = ti.dag_id
-
     query = XCom.get_many(
         key=key,
-        run_id=ti.run_id,
+        run_id=run_id,
         dag_ids=dag_id,
         task_ids=task_ids,
         map_indexes=map_indexes,
@@ -3532,8 +3529,11 @@ class TaskInstance(Base, LoggingMixin):
         a non-str iterable), a list of matching XComs is returned. Elements in
         the list is ordered by item ordering in ``task_id`` and ``map_index``.
         """
+        if dag_id is None:
+            dag_id = self.dag_id
+
         return _xcom_pull(
-            ti=self,
+            run_id=self.run_id,
             task_ids=task_ids,
             dag_id=dag_id,
             key=key,

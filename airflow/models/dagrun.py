@@ -57,7 +57,7 @@ from airflow.models import Log
 from airflow.models.abstractoperator import NotMapped
 from airflow.models.base import Base, StringID
 from airflow.models.expandinput import NotFullyPopulated
-from airflow.models.taskinstance import TaskInstance as TI
+from airflow.models.taskinstance import XCOM_RETURN_KEY, TaskInstance as TI, _xcom_pull
 from airflow.models.tasklog import LogTemplate
 from airflow.stats import Stats
 from airflow.ti_deps.dep_context import DepContext
@@ -1627,6 +1627,62 @@ class DagRun(Base, LoggingMixin):
             stacklevel=2,
         )
         return self.get_log_template(session=session).filename
+
+    @provide_session
+    def xcom_pull(
+        self,
+        task_ids: str | Iterable[str] | None = None,
+        dag_id: str | None = None,
+        key: str = XCOM_RETURN_KEY,
+        include_prior_dates: bool = False,
+        session: Session = NEW_SESSION,
+        *,
+        map_indexes: int | Iterable[int] | None = None,
+        default: Any = None,
+    ) -> Any:
+        """Pull XComs that optionally meet certain criteria.
+
+        :param key: A key for the XCom. If provided, only XComs with matching
+            keys will be returned. The default key is ``'return_value'``, also
+            available as constant ``XCOM_RETURN_KEY``. This key is automatically
+            given to XComs returned by tasks (as opposed to being pushed
+            manually). To remove the filter, pass *None*.
+        :param task_ids: Only XComs from tasks with matching ids will be
+            pulled. Pass *None* to remove the filter.
+        :param dag_id: If provided, only pulls XComs from this DAG. If *None*
+            (default), the DAG of the calling task is used.
+        :param map_indexes: If provided, only pull XComs with matching indexes.
+            If *None* (default), this is inferred from the task(s) being pulled
+            (see below for details).
+        :param include_prior_dates: If False, only XComs from the current
+            execution_date are returned. If *True*, XComs from previous dates
+            are returned as well.
+
+        When pulling one single task (``task_id`` is *None* or a str) without
+        specifying ``map_indexes``, the return value is inferred from whether
+        the specified task is mapped. If not, value from the one single task
+        instance is returned. If the task to pull is mapped, an iterator (not a
+        list) yielding XComs from mapped task instances is returned. In either
+        case, ``default`` (*None* if not specified) is returned if no matching
+        XComs are found.
+
+        When pulling multiple tasks (i.e. either ``task_id`` or ``map_index`` is
+        a non-str iterable), a list of matching XComs is returned. Elements in
+        the list is ordered by item ordering in ``task_id`` and ``map_index``.
+        """
+        if dag_id is None:
+            dag_id = self.dag_id
+
+        return _xcom_pull(
+            run_id=self.run_id,
+            task_ids=task_ids,
+            dag_id=dag_id,
+            key=key,
+            include_prior_dates=include_prior_dates,
+            session=session,
+            map_indexes=map_indexes,
+            default=default,
+        )
 
 
 class DagRunNote(Base):
